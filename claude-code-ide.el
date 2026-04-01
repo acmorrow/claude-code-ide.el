@@ -3,7 +3,7 @@
 ;; Copyright (C) 2025
 
 ;; Author: Yoav Orot
-;; Version: 0.2.6
+;; Version: 0.2.7
 ;; Package-Requires: ((emacs "28.1") (websocket "1.12") (transient "0.9.0") (web-server "0.1.2"))
 ;; Keywords: ai, claude, code, assistant, mcp, websocket
 ;; URL: https://github.com/manzaltu/claude-code-ide.el
@@ -148,8 +148,9 @@ Can be `'left', `'right', `'top', or `'bottom'."
                  (const :tag "Bottom" bottom))
   :group 'claude-code-ide)
 
-(defcustom claude-code-ide-window-width 90
-  "Width of the Claude Code side window when opened on left or right."
+(defcustom claude-code-ide-window-width 100
+  "Body width of the Claude Code side window when opened on left or right.
+This sets the usable text area width, excluding fringes and margins."
   :type 'integer
   :group 'claude-code-ide)
 
@@ -177,6 +178,13 @@ When non-nil (default), the Claude Code side window is restored
 after opening ediff.  When nil, the Claude Code window remains
 hidden during diff viewing, giving you more screen space for the
 diff comparison."
+  :type 'boolean
+  :group 'claude-code-ide)
+
+(defcustom claude-code-ide-enable-execute-code t
+  "Whether to expose the executeCode tool to the model.
+When non-nil, Claude Code can evaluate Elisp expressions in Emacs
+via the executeCode MCP tool.  Set to nil to hide the tool entirely."
   :type 'boolean
   :group 'claude-code-ide)
 
@@ -639,7 +647,12 @@ If `claude-code-ide-focus-on-open' is non-nil, the window is selected."
                         (side . ,side)
                         (slot . ,slot)
                         ,@(when (memq side '(left right))
-                            `((window-width . ,claude-code-ide-window-width)))
+                            `((window-width
+                               . ,(lambda (win)
+                                    (let ((delta (- claude-code-ide-window-width
+                                                    (window-body-width win))))
+                                      (unless (zerop delta)
+                                        (window-resize win delta t)))))))
                         ,@(when (memq side '(top bottom))
                             `((window-height . ,claude-code-ide-window-height)))
                         (window-parameters . ,window-parameters)))))
@@ -853,7 +866,6 @@ Signals an error if terminal fails to initialize."
   (let* ((claude-cmd (claude-code-ide--build-claude-command continue resume session-id))
          (default-directory working-dir)
          (env-vars (list (format "CLAUDE_CODE_SSE_PORT=%d" port)
-                         "ENABLE_IDE_INTEGRATION=true"
                          "TERM_PROGRAM=emacs"
                          "FORCE_CODE_TERMINAL=true")))
     ;; Log the command for debugging
